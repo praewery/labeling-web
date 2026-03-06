@@ -6,106 +6,29 @@ import { db } from "./firestore.js";
 
 const app = express();
 
-// ตั้งค่า Path ให้รู้จักโฟลเดอร์ปัจจุบัน
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use(cors());
 app.use(express.json());
 
-// 1. แก้ไข: ให้ Express เสิร์ฟไฟล์จากโฟลเดอร์ปัจจุบัน (เพราะไม่มี dist)
-app.use(express.static(__dirname));
+// บอกให้ Express ไปหยิบไฟล์จากโฟลเดอร์ dist ที่ Vite สร้างให้
+const distPath = path.join(__dirname, "dist");
+app.use(express.static(distPath));
 
-// ==========================
-// USERS API
-// ==========================
-app.post("/api/users", async (req, res) => {
-  const { username, password, role } = req.body;
-  try {
-    const ref = await db.collection("users").add({
-      username,
-      password,
-      role,
-      createdAt: Date.now(),
-    });
-    res.json({ id: ref.id });
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
-
+// --- API ของคุณ (Users, Items, Labels) ---
 app.get("/api/users", async (req, res) => {
   try {
     const snapshot = await db.collection("users").get();
-    const users = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
+  } catch (err) { res.status(500).json({ error: err }); }
 });
+// (ก๊อปปี้ API อื่นๆ ของคุณมาวางตรงนี้ได้เลย)
 
-// ==========================
-// ITEMS API
-// ==========================
-app.post("/api/items", async (req, res) => {
-  try {
-    const ref = await db.collection("items").add(req.body);
-    res.json({ id: ref.id });
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
-
-app.get("/api/items", async (req, res) => {
-  try {
-    const snapshot = await db.collection("items").get();
-    const items = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.json(items);
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
-
-// ==========================
-// LABELS API
-// ==========================
-app.post("/api/labels", async (req, res) => {
-  try {
-    const ref = await db.collection("labels").add({
-      ...req.body,
-      createdAt: Date.now(),
-    });
-    res.json({ id: ref.id });
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
-
-app.get("/api/labels", async (req, res) => {
-  try {
-    const snapshot = await db.collection("labels").get();
-    const labels = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.json(labels);
-  } catch (err) {
-    res.status(500).json({ error: err });
-  }
-});
-
-// ==========================
-// FRONTEND ROUTING
-// ==========================
-// 2. แก้ไข: ส่งไฟล์ index.html ที่อยู่หน้าแรกสุดออกมา
+// --- ส่งหน้าเว็บให้ User ---
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
 const PORT = process.env.PORT || 8080;
