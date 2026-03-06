@@ -6,15 +6,15 @@ import { db } from "./firestore.js";
 
 const app = express();
 
-// ตั้งค่า Path สำหรับ ES Modules เพื่อให้หาโฟลเดอร์ dist เจอ
+// ตั้งค่า Path ให้รู้จักโฟลเดอร์ปัจจุบัน
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use(cors());
 app.use(express.json());
 
-// 1. ให้ Express เสิร์ฟไฟล์ Static จากโฟลเดอร์ dist (ที่ได้จากการ build React)
-app.use(express.static(path.join(__dirname, "dist")));
+// 1. แก้ไข: ให้ Express เสิร์ฟไฟล์จากโฟลเดอร์ปัจจุบัน (เพราะไม่มี dist)
+app.use(express.static(__dirname));
 
 // ==========================
 // USERS API
@@ -103,8 +103,9 @@ app.get("/api/labels", async (req, res) => {
 // ==========================
 // FRONTEND ROUTING
 // ==========================
+// 2. แก้ไข: ส่งไฟล์ index.html ที่อยู่หน้าแรกสุดออกมา
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 const PORT = process.env.PORT || 8080;
