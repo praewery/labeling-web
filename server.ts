@@ -1,308 +1,108 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
-import { Firestore } from "@google-cloud/firestore";
+import cors from "cors";
 import path from "path";
-import { fileURLToPath } from "url";
+import { db } from "./firestore.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const app = express();
 
-const firestore = new Firestore();
+app.use(cors());
+app.use(express.json());
 
-async function startServer() {
+const PORT = process.env.PORT || 8080;
 
-  const app = express();
+app.get("/", (req, res) => {
+  res.send("Labeling API Running");
+});
 
-  app.use(express.json());
 
-  // =========================
-  // AUTH API
-  // =========================
+// ==========================
+// USERS
+// ==========================
 
-  app.post("/api/auth/login", async (req, res) => {
+app.post("/api/users", async (req, res) => {
+  const { username, password, role } = req.body;
 
-    const { username, password } = req.body;
-
-    const snapshot = await firestore
-      .collection("users")
-      .where("username", "==", username)
-      .where("password", "==", password)
-      .get();
-
-    if (!snapshot.empty) {
-
-      const doc = snapshot.docs[0];
-
-      res.json({
-        id: doc.id,
-        ...doc.data()
-      });
-
-    } else {
-
-      res.status(401).json({
-        error: "Invalid credentials"
-      });
-
-    }
-
-  });
-
-  app.post("/api/auth/signup", async (req, res) => {
-
-    const { username, password } = req.body;
-
-    const existing = await firestore
-      .collection("users")
-      .where("username", "==", username)
-      .get();
-
-    if (!existing.empty) {
-
-      return res.status(400).json({
-        error: "Username already exists"
-      });
-
-    }
-
-    const userRef = await firestore
-      .collection("users")
-      .add({
-        username,
-        password,
-        role: "labeler",
-        createdAt: Date.now()
-      });
-
-    res.json({
-      id: userRef.id,
+  try {
+    const ref = await db.collection("users").add({
       username,
-      role: "labeler"
+      password,
+      role,
+      createdAt: Date.now(),
     });
 
-  });
-
-  // =========================
-  // CONFIG API
-  // =========================
-
-  app.get("/api/config", async (req, res) => {
-
-    const doc = await firestore
-      .collection("config")
-      .doc("main")
-      .get();
-
-    if (!doc.exists) {
-
-      return res.json({
-        fields: []
-      });
-
-    }
-
-    res.json({
-      fields: doc.data()?.fields || []
-    });
-
-  });
-
-  app.post("/api/config", async (req, res) => {
-
-    const { fields } = req.body;
-
-    await firestore
-      .collection("config")
-      .doc("main")
-      .set({
-        fields
-      });
-
-    res.json({
-      success: true
-    });
-
-  });
-
-  // =========================
-  // ITEMS API
-  // =========================
-
-  app.get("/api/items", async (req, res) => {
-
-    const snapshot = await firestore
-      .collection("items")
-      .orderBy("createdAt", "desc")
-      .get();
-
-    const items = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    res.json(items);
-
-  });
-
-  app.get("/api/items/:id", async (req, res) => {
-
-    const doc = await firestore
-      .collection("items")
-      .doc(req.params.id)
-      .get();
-
-    if (!doc.exists) {
-
-      return res.status(404).json({
-        error: "Item not found"
-      });
-
-    }
-
-    res.json({
-      id: doc.id,
-      ...doc.data()
-    });
-
-  });
-
-  app.post("/api/items/bulk", async (req, res) => {
-
-    const { urls } = req.body;
-
-    const batch = firestore.batch();
-
-    for (const url of urls) {
-
-      const ref = firestore
-        .collection("items")
-        .doc();
-
-      batch.set(ref, {
-        url,
-        status: "incomplete",
-        data: {},
-        createdAt: Date.now()
-      });
-
-    }
-
-    await batch.commit();
-
-    res.json({
-      success: true
-    });
-
-  });
-
-  app.post("/api/items/delete", async (req, res) => {
-
-    const { ids } = req.body;
-
-    const batch = firestore.batch();
-
-    for (const id of ids) {
-
-      const ref = firestore
-        .collection("items")
-        .doc(id);
-
-      batch.delete(ref);
-
-    }
-
-    await batch.commit();
-
-    res.json({
-      success: true
-    });
-
-  });
-
-  app.delete("/api/items", async (req, res) => {
-
-    const snapshot = await firestore
-      .collection("items")
-      .get();
-
-    const batch = firestore.batch();
-
-    snapshot.docs.forEach(doc => {
-
-      batch.delete(doc.ref);
-
-    });
-
-    await batch.commit();
-
-    res.json({
-      success: true
-    });
-
-  });
-
-  app.put("/api/items/:id", async (req, res) => {
-
-    const { url, status, data } = req.body;
-
-    const updateData: any = {};
-
-    if (url !== undefined) updateData.url = url;
-    if (status !== undefined) updateData.status = status;
-    if (data !== undefined) updateData.data = data;
-
-    await firestore
-      .collection("items")
-      .doc(req.params.id)
-      .update(updateData);
-
-    res.json({
-      success: true
-    });
-
-  });
-
-  // =========================
-  // VITE (dev / production)
-  // =========================
-
-  if (process.env.NODE_ENV !== "production") {
-
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true
-      },
-      appType: "spa"
-    });
-
-    app.use(vite.middlewares);
-
-  } else {
-
-    app.use(express.static(path.join(__dirname, "dist")));
-
-    app.get("*", (req, res) => {
-
-      res.sendFile(
-        path.join(__dirname, "dist", "index.html")
-      );
-
-    });
-
+    res.json({ id: ref.id });
+  } catch (err) {
+    res.status(500).json({ error: err });
   }
+});
 
-  // =========================
-  // START SERVER
-  // =========================
+app.get("/api/users", async (req, res) => {
+  const snapshot = await db.collection("users").get();
 
-  const PORT = process.env.PORT || 8080;
+  const users = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
 
-  app.listen(PORT, "0.0.0.0", () => {
+  res.json(users);
+});
 
-    console.log(`Server running on port ${PORT}`);
 
-  });
+// ==========================
+// ITEMS
+// ==========================
 
-}
+app.post("/api/items", async (req, res) => {
+  try {
+    const ref = await db.collection("items").add(req.body);
 
-startServer();
+    res.json({ id: ref.id });
+  } catch (err) {
+    res.status(500).json({ error: err });
+  }
+});
+
+app.get("/api/items", async (req, res) => {
+  const snapshot = await db.collection("items").get();
+
+  const items = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  res.json(items);
+});
+
+
+// ==========================
+// LABELS
+// ==========================
+
+app.post("/api/labels", async (req, res) => {
+  try {
+    const ref = await db.collection("labels").add({
+      ...req.body,
+      createdAt: Date.now(),
+    });
+
+    res.json({ id: ref.id });
+  } catch (err) {
+    res.status(500).json({ error: err });
+  }
+});
+
+app.get("/api/labels", async (req, res) => {
+  const snapshot = await db.collection("labels").get();
+
+  const labels = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+
+  res.json(labels);
+});
+
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
