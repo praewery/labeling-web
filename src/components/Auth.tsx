@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { LogIn, UserPlus, Shield, User, Eye, EyeOff } from 'lucide-react';
 
 interface AuthProps {
-  onLogin: (user: { id: number; username: string; role: string }) => void;
+  // เปลี่ยน id เป็น string หรือ number ตามที่ Firestore ส่งมา (Firestore ใช้ string เป็นส่วนใหญ่)
+  onLogin: (user: { id: string | number; username: string; role: string }) => void;
 }
 
 export default function Auth({ onLogin }: AuthProps) {
@@ -19,6 +20,7 @@ export default function Auth({ onLogin }: AuthProps) {
     setLoading(true);
 
     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+    
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -27,13 +29,16 @@ export default function Auth({ onLogin }: AuthProps) {
       });
 
       const data = await res.json();
+
       if (res.ok) {
         onLogin(data);
       } else {
-        setError(data.error || 'Something went wrong');
+        // แก้ไข: ให้แสดง data.details เพื่อดู Error จริงจาก Firestore
+        setError(data.details || data.error || 'Something went wrong');
       }
     } catch (err) {
-      setError('Connection error');
+      console.error("Fetch Error:", err);
+      setError('Cannot connect to server. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -69,7 +74,7 @@ export default function Auth({ onLogin }: AuthProps) {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                   placeholder="Enter username"
                   required
                 />
@@ -86,7 +91,7 @@ export default function Auth({ onLogin }: AuthProps) {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                  className="block w-full pl-10 pr-10 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all outline-none"
                   placeholder="Enter password"
                   required
                 />
@@ -101,7 +106,7 @@ export default function Auth({ onLogin }: AuthProps) {
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium border border-red-100">
+              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium border border-red-100 break-words">
                 {error}
               </div>
             )}
